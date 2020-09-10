@@ -1,4 +1,4 @@
-IMAGE    ?= lmapii/iotwifi
+IMAGE    ?= lmapii/txwifi
 NAME     ?= txwifi
 VERSION  ?= 1.0.4
 
@@ -11,8 +11,8 @@ build:
 	docker build -t $(IMAGE):arm32v6-$(VERSION) .
 
 push:
-	docker build -t $(IMAGE):latest .
-	docker build -t $(IMAGE):arm32v6-$(VERSION) .
+	docker push $(IMAGE):latest
+	docker push $(IMAGE):arm32v6-$(VERSION)
 
 dev_build:
 	docker build -t $(IMAGE) ./dev/
