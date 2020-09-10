@@ -1,4 +1,4 @@
-IMAGE    ?= cjimti/iotwifi
+IMAGE    ?= lmapii/iotwifi
 NAME     ?= txwifi
 VERSION  ?= 1.0.4
 
@@ -19,8 +19,8 @@ dev_build:
 
 dev_run:
 	sudo docker run --rm -it --privileged --network=host \
-                   -v $(CURDIR):/go/src/github.com/txn2/txwifi \
-                   -w /go/src/github.com/txn2/txwifi \
+                   -v $(CURDIR):/go/src/github.com/lmapii/txwifi \
+                   -w /go/src/github.com/lmapii/txwifi \
                    --name=$(NAME) $(IMAGE):latest
 
 

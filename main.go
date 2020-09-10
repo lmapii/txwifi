@@ -7,16 +7,18 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/bhoriuchi/go-bunyan/bunyan"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
-	"github.com/txn2/txwifi/iotwifi"
+	"github.com/lmapii/txwifi/iotwifi"
 )
 
-// ApiReturn structures a message for returned API calls.
-type ApiReturn struct {
+// APIReturn structures a message for returned API calls.
+type APIReturn struct {
 	Status  string      `json:"status"`
 	Message string      `json:"message"`
 	Payload interface{} `json:"payload"`
@@ -39,19 +41,25 @@ func main() {
 
 	messages := make(chan iotwifi.CmdMessage, 1)
 
-	cfgUrl := setEnvIfEmpty("IOTWIFI_CFG", "cfg/wificfg.json")
+	cfgURL := setEnvIfEmpty("IOTWIFI_CFG", "cfg/wificfg.json")
 	port := setEnvIfEmpty("IOTWIFI_PORT", "8080")
 
-	go iotwifi.RunWifi(blog, messages, cfgUrl)
-	wpacfg := iotwifi.NewWpaCfg(blog, cfgUrl)
+	bootDelay, err := strconv.Atoi(setEnvIfEmpty("IOTWIFI_BOOT_DELAY", "0"))
+	if err != nil {
+		bootDelay = 0
+	}
+	time.Sleep(time.Duration(bootDelay) * time.Second)
+
+	go iotwifi.RunWifi(blog, messages, cfgURL)
+	wpacfg := iotwifi.NewWpaCfg(blog, cfgURL)
 
 	apiPayloadReturn := func(w http.ResponseWriter, message string, payload interface{}) {
-		apiReturn := &ApiReturn{
+		APIReturn := &APIReturn{
 			Status:  "OK",
 			Message: message,
 			Payload: payload,
 		}
-		ret, _ := json.Marshal(apiReturn)
+		ret, _ := json.Marshal(APIReturn)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(ret)
@@ -80,11 +88,11 @@ func main() {
 
 	// common error return from api
 	retError := func(w http.ResponseWriter, err error) {
-		apiReturn := &ApiReturn{
+		APIReturn := &APIReturn{
 			Status:  "FAIL",
 			Message: err.Error(),
 		}
-		ret, _ := json.Marshal(apiReturn)
+		ret, _ := json.Marshal(APIReturn)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(ret)
@@ -115,13 +123,13 @@ func main() {
 			return
 		}
 
-		apiReturn := &ApiReturn{
+		APIReturn := &APIReturn{
 			Status:  "OK",
 			Message: "Connection",
 			Payload: connection,
 		}
 
-		ret, err := json.Marshal(apiReturn)
+		ret, err := json.Marshal(APIReturn)
 		if err != nil {
 			retError(w, err)
 			return
@@ -140,13 +148,13 @@ func main() {
 			return
 		}
 
-		apiReturn := &ApiReturn{
+		APIReturn := &APIReturn{
 			Status:  "OK",
 			Message: "Networks",
 			Payload: wpaNetworks,
 		}
 
-		ret, err := json.Marshal(apiReturn)
+		ret, err := json.Marshal(APIReturn)
 		if err != nil {
 			retError(w, err)
 			return
@@ -160,11 +168,11 @@ func main() {
 	killHandler := func(w http.ResponseWriter, r *http.Request) {
 		messages <- iotwifi.CmdMessage{Id: "kill"}
 
-		apiReturn := &ApiReturn{
+		APIReturn := &APIReturn{
 			Status:  "OK",
 			Message: "Killing service.",
 		}
-		ret, err := json.Marshal(apiReturn)
+		ret, err := json.Marshal(APIReturn)
 		if err != nil {
 			retError(w, err)
 			return

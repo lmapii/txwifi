@@ -70,7 +70,11 @@ func (wpa *WpaCfg) StartAP() {
 	command.UpApInterface()
 	command.ConfigureApInterface()
 
-	cmd := exec.Command("hostapd", "-d", "/dev/stdin")
+	time.Sleep(2 * time.Second)
+
+	// removing use of log output for "ready" state
+	// cmd := exec.Command("hostapd", "-d", "/dev/stdin")
+	cmd := exec.Command("hostapd", "/dev/stdin")
 
 	// pipes
 	hostapdPipe, _ := cmd.StdinPipe()
@@ -79,16 +83,16 @@ func (wpa *WpaCfg) StartAP() {
 		panic(err)
 	}
 
-	messages := make(chan string, 1)
-	blocked := true
+	// messages := make(chan string, 1)
+	// blocked := true
 
 	stdOutScanner := bufio.NewScanner(cmdStdoutReader)
 	go func() {
 		for stdOutScanner.Scan() {
 			wpa.Log.Info("HOSTAPD GOT: %s", stdOutScanner.Text())
-			if blocked {
-				messages <- stdOutScanner.Text()
-			}
+			// if blocked {
+			// 	messages <- stdOutScanner.Text()
+			// }
 		}
 	}()
 
@@ -102,7 +106,7 @@ ignore_broadcast_ssid=0
 wpa=2
 wpa_passphrase=` + wpa.WpaCfg.HostApdCfg.WpaPassphrase + `
 wpa_key_mgmt=WPA-PSK
-wpa_pairwise=TKIP
+wpa_pairwise=TKIP CCMP
 rsn_pairwise=CCMP`
 
 	wpa.Log.Info("Hostapd CFG: %s", cfg)
@@ -111,23 +115,25 @@ rsn_pairwise=CCMP`
 	cmd.Start()
 	hostapdPipe.Close()
 
-	for {
-		out := <-messages // Block until we receive a message on the channel
-		if strings.Contains(out, "uap0: AP-DISABLED") {
-			wpa.Log.Info("Hostapd DISABLED")
-			//cmd.Process.Kill()
-			//cmd.Wait()
+	/*
+		for {
+			out := <-messages // Block until we receive a message on the channel
+			if strings.Contains(out, "uap0: AP-DISABLED") {
+				wpa.Log.Info("Hostapd DISABLED")
+				//cmd.Process.Kill()
+				//cmd.Wait()
 
-			blocked = false
-			return
+				blocked = false
+				return
 
+			}
+			if strings.Contains(out, "uap0: AP-ENABLED") {
+				wpa.Log.Info("Hostapd ENABLED")
+				blocked = false
+				return
+			}
 		}
-		if strings.Contains(out, "uap0: AP-ENABLED") {
-			wpa.Log.Info("Hostapd ENABLED")
-			blocked = false
-			return
-		}
-	}
+	*/
 }
 
 // ConfiguredNetworks returns a list of configured wifi networks.
@@ -143,6 +149,10 @@ func (wpa *WpaCfg) ConfiguredNetworks() string {
 // ConnectNetwork connects to a wifi network
 func (wpa *WpaCfg) ConnectNetwork(creds WpaCredentials) (WpaConnection, error) {
 	connection := WpaConnection{}
+
+	// 0. Remove old networks
+	exec.Command("wpa_cli", "-i", "wlan0", "remove_network", "all").Output()
+	wpa.Log.Info("Removed old networks")
 
 	// 1. Add a network
 	addNetOut, err := exec.Command("wpa_cli", "-i", "wlan0", "add_network").Output()
@@ -162,8 +172,13 @@ func (wpa *WpaCfg) ConnectNetwork(creds WpaCredentials) (WpaConnection, error) {
 	ssidStatus := strings.TrimSpace(string(addSsidOut))
 	wpa.Log.Info("WPA add ssid got: %s", ssidStatus)
 
-	// 3. Set the psk for the new network
-	addPskOut, err := exec.Command("wpa_cli", "-i", "wlan0", "set_network", net, "psk", "\""+creds.Psk+"\"").Output()
+	// 3. Set the psk for the new network if it exists
+	var addPskOut []byte
+	if len(creds.Psk) != 0 {
+		addPskOut, err = exec.Command("wpa_cli", "-i", "wlan0", "set_network", net, "psk", "\""+creds.Psk+"\"").Output()
+	} else {
+		addPskOut, err = exec.Command("wpa_cli", "-i", "wlan0", "set_network", net, "key_mgmt", "NONE").Output()
+	}
 	if err != nil {
 		wpa.Log.Fatal(err.Error())
 		return connection, err
@@ -179,7 +194,7 @@ func (wpa *WpaCfg) ConnectNetwork(creds WpaCredentials) (WpaConnection, error) {
 	}
 	enableStatus := strings.TrimSpace(string(enableOut))
 	wpa.Log.Info("WPA enable got: %s", enableStatus)
-	
+
 	// 5. Select the new network
 	selectOut, err := exec.Command("wpa_cli", "-i", "wlan0", "select_network", net).Output()
 	if err != nil {
@@ -269,7 +284,7 @@ func (wpa *WpaCfg) ScanNetworks() (map[string]WpaNetwork, error) {
 
 	scanOut, err := exec.Command("wpa_cli", "-i", "wlan0", "scan").Output()
 	if err != nil {
-		wpa.Log.Fatal(err.Error())
+		wpa.Log.Fatal(err)
 		return wpaNetworks, err
 	}
 	scanOutClean := strings.TrimSpace(string(scanOut))
@@ -286,9 +301,9 @@ func (wpa *WpaCfg) ScanNetworks() (map[string]WpaNetwork, error) {
 
 		networkListOutArr := strings.Split(string(networkListOut), "\n")
 		for _, netRecord := range networkListOutArr[1:] {
-			if strings.Contains(netRecord, "[P2P]") {
-				continue
-			}
+			// if strings.Contains(netRecord, "[P2P]") {
+			// 	continue
+			// }
 
 			fields := strings.Fields(netRecord)
 
