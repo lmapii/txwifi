@@ -247,6 +247,13 @@ func (wpa *WpaCfg) ConnectNetwork(creds WpaCredentials) (WpaConnection, error) {
 	return connection, nil
 }
 
+// Disconnect silently removes all networks
+func (wpa *WpaCfg) Disconnect() {
+	// 0. Remove old networks
+	exec.Command("wpa_cli", "-i", "wlan0", "remove_network", "all").Output()
+	wpa.Log.Info("Removed all networks")
+}
+
 // Status returns the WPA wireless status.
 func (wpa *WpaCfg) Status() (map[string]string, error) {
 	cfgMap := make(map[string]string, 0)

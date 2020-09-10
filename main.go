@@ -110,6 +110,13 @@ func main() {
 		apiPayloadReturn(w, "status", status)
 	}
 
+	// handle /disconnect
+	disconnectHandler := func(w http.ResponseWriter, r *http.Request) {
+		// ignoring content since we're simply disconnecting all networks
+		wpacfg.Disconnect()
+		apiPayloadReturn(w, "status", struct{}{})
+	}
+
 	// handle /connect POSTs json in the form of iotwifi.WpaConnect
 	connectHandler := func(w http.ResponseWriter, r *http.Request) {
 		var creds iotwifi.WpaCredentials
@@ -202,6 +209,7 @@ func main() {
 	// set app routes
 	r.HandleFunc("/status", statusHandler)
 	r.HandleFunc("/connect", connectHandler).Methods("POST")
+	r.HandleFunc("/disconnect", disconnectHandler).Methods("POST")
 	r.HandleFunc("/scan", scanHandler)
 	r.HandleFunc("/kill", killHandler)
 	http.Handle("/", r)
